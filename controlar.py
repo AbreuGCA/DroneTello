@@ -13,7 +13,9 @@ tello.streamon()
 frame_read = tello.get_frame_read()
 
 pygame.init()
-screen = pygame.display.set_mode([960, 720])
+window_width = 960
+window_height = 720
+screen = pygame.display.set_mode([window_width, window_height])
 
 project_path = path.dirname(path.abspath(__file__))
 xml_path = path.join(project_path, 'haarcascade_frontalface_alt2.xml')
@@ -28,6 +30,10 @@ forward_backward = 0
 yaw = 0
 
 velocity = 50
+last_x = 0
+last_y = 0
+last_w = 0
+last_h = 0
 while not should_stop:
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
@@ -51,6 +57,8 @@ while not should_stop:
                 tello.takeoff()
             if event.key == pygame.K_DOWN:
                 tello.land()
+#            if event.key == pygame.K_f:
+#                tello.flip_back()
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_w:
                 forward_backward = 0
@@ -78,23 +86,54 @@ while not should_stop:
         pygame.quit()
 
     frame = frame_read.frame
-    frame = np.rot90(frame)
+    #frame = np.rot90(frame)
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = clf.detectMultiScale(gray)
 
-
+    frame = np.rot90(frame)
     frame = pygame.surfarray.make_surface(frame)
 
-    tello.send_rc_control(left_right, forward_backward, up_down, yaw)
 
     screen.blit(frame, (0, 0))
 
+    left_line = window_width * 15 / 100
+    right_line = window_width * 75 / 100
+    pygame.draw.line(screen, (255, 0, 0), (left_line, 0), (left_line, window_height))
+    pygame.draw.line(screen, (255, 0, 0), (right_line, 0), (right_line, window_height))
+
+    left_right = 0
+    mArea = -1000000
+    mAX = -1
+    mAY = -1
     for x, y, w, h in faces:
-        pygame.draw.rect(screen, (0, 0, 255), (x, y, w, h))
+        x = window_width - x - w
+        aX = x + w / 2
+        aY = y + h / 2
+
+        #pygame.draw.circle(screen, (255, 0, 0), (aX, aY), 10)
+        #pygame.draw.rect(screen, (0, 0, 255), (x, y, w, h), 1)
+
+        if (mArea < (w * h)):
+            mArea = w*h
+            mAX = aX
+            mAY = aY
+
+    if (mAX != -1):
+        dist = window_width/2 - mAX
+        left_right = (1 if dist > 0 else -1) * 20
+        yaw = (1 if dist > 0 else -1) * 50
+        if (abs(dist) < window_width*10/100):
+            left_right = 0
+            yaw = 0
+
+        pygame.draw.circle(screen, (255, 0, 0), (mAX, mAY), 10)
+
+    tello.send_rc_control(left_right, forward_backward, up_down, yaw)
+
+    print(f"{tello.get_battery()}%")
 
     pygame.display.update()
-
-    time.sleep(1 / 120)
+    time.sleep(1 / 60)
 
 tello.end()

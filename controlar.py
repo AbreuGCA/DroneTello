@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from os import path
 import time
-
+import math
 
 tello = Tello()
 tello.connect()
@@ -16,6 +16,25 @@ pygame.init()
 window_width = 960
 window_height = 720
 screen = pygame.display.set_mode([window_width, window_height])
+
+def mesure_distance(rect_size):
+    real_life_size = 25  # in cm
+    cam_size = 700 # in px
+
+    scale = real_life_size * cam_size
+    return (scale / rect_size) # px to cm
+    
+
+def text_to_screen(screen, text, x, y, size = 50, color = (200, 000, 000)):
+    try:
+        text = str(text)
+        font = pygame.font.Font(pygame.font.get_default_font(), 36)
+        text = font.render(text, True, color)
+        screen.blit(text, (x, y))
+
+    except Exception as e:
+        print ('Font Error, saw it coming')
+        raise e
 
 project_path = path.dirname(path.abspath(__file__))
 xml_path = path.join(project_path, 'haarcascade_frontalface_alt2.xml')
@@ -29,7 +48,7 @@ up_down = 0
 forward_backward = 0
 yaw = 0
 
-velocity = 50
+velocity = 10
 last_x = 0
 last_y = 0
 last_w = 0
@@ -89,8 +108,7 @@ while not should_stop:
     #frame = np.rot90(frame)
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = clf.detectMultiScale(gray)
-
+    faces = clf.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=12, minSize=(50, 50))
     frame = np.rot90(frame)
     frame = pygame.surfarray.make_surface(frame)
 
@@ -106,6 +124,7 @@ while not should_stop:
     mArea = -1000000
     mAX = -1
     mAY = -1
+    rect_size = 0
     for x, y, w, h in faces:
         x = window_width - x - w
         aX = x + w / 2
@@ -118,6 +137,7 @@ while not should_stop:
             mArea = w*h
             mAX = aX
             mAY = aY
+            rect_size = w
 
     if (mAX != -1):
         dist = window_width/2 - mAX
@@ -128,6 +148,15 @@ while not should_stop:
             yaw = 0
 
         pygame.draw.circle(screen, (255, 0, 0), (mAX, mAY), 10)
+        dist_to_head = mesure_distance(rect_size)
+        text = "%.2f cm" %dist_to_head
+        text_to_screen(screen,text,100,100)
+
+        if (dist_to_head > 100):
+            forward_backward = velocity
+        else:
+            forward_backward = 0
+            
 
     tello.send_rc_control(left_right, forward_backward, up_down, yaw)
 
